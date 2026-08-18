@@ -1,0 +1,4 @@
+# dsh-codex-bridge bundle patch: MCP bridge for DSH
+- insert:
+    - id: codex-bridge
+      name: 'dsh-codex-bridge'

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #16150F; --paper: #F4F2EC; --card: #FBFAF6; --line: #DAD5C8;
+  --green: #1E5C42; --amber: #B7791F; --red: #B91C1C; --blue: #1E3A5F;
+  --font: 'Archivo', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', 'Cascadia Code', 'Consolas', monospace;
+  --serif: 'Instrument Serif', serif;
+  --queued: #8B7E6A; --running: var(--blue); --succeeded: var(--green);
+  --failed: var(--red); --timed_out: var(--amber); --cancelled: #8B7E6A; --orphaned: #5C3A3A;
+}
+@media (prefers-color-scheme:dark) {
+  :root {
+    --ink: #E8E4D8; --paper: #1A1814; --card: #24221E; --line: #3A3732;
+    --green: #52B788; --amber: #FF9E00; --red: #FF6B6B; --blue: #4CC9F0;
+    --queued: #6B5D4E; --running: var(--blue); --succeeded: var(--green);
+    --failed: var(--red); --timed_out: var(--amber); --cancelled: #6B5D4E; --orphaned: #8B4A4A;
+  }
+}
+* { box-sizing:border-box; margin:0; padding:0 }
+body { font-family:var(--font); background:var(--paper); color:var(--ink); font-size:14px; line-height:1.5; height:100vh; overflow:hidden }
+#app { display:flex; height:100vh; }
+/* Login overlay */
+#loginOverlay { position:fixed; inset:0; background:rgba(22,21,15,.5); display:flex; align-items:center; justify-content:center; z-index:1000; backdrop-filter:blur(4px) }
+#loginBox { background:var(--card); border:1px solid var(--line); padding:36px; width:360px; max-width:90vw; box-shadow:4px 4px 0 var(--line) }
+#loginBox h2 { font-family:var(--serif); font-size:24px; margin-bottom:4px }
+#loginBox p { font-size:12px; color:var(--ink); opacity:.6; margin-bottom:20px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em; font-size:10px }
+#loginBox input { width:100%; padding:10px 12px; border:1px solid var(--line); font-size:14px; background:var(--paper); color:var(--ink); margin-bottom:12px; font-family:var(--mono); font-size:12px }
+#loginBox input:focus { outline:1px solid var(--green) }
+#loginBox button { width:100%; padding:10px; background:var(--green); color:var(--card); border:none; font-size:12px; cursor:pointer; font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em; transition:opacity .15s }
+#loginBox button:hover { opacity:.85 }
+#loginBox .error { color:var(--red); font-size:12px; margin-top:8px; display:none; font-family:var(--mono); font-size:10px }
+/* Sidebar */
+.sidebar { width:280px; min-width:240px; background:var(--card); border-right:1px solid var(--line); display:flex; flex-direction:column; overflow:hidden }
+.sidebar-header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:10px; flex-shrink:0 }
+.sidebar-header h1 { font-family:var(--serif); font-size:22px; line-height:1 }
+.sidebar-header h1 span { color:var(--green) }
+.sidebar-header .badge { font-family:var(--mono); font-size:10px; background:var(--ink); color:var(--paper); padding:1px 8px; letter-spacing:.06em }
+.sidebar-header .logout-btn { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:.1em; padding:4px 10px; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; opacity:.5; transition:opacity .15s; margin-left:auto }
+.sidebar-header .logout-btn:hover { opacity:1 }
+.sidebar-controls { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:6px; flex-wrap:wrap; flex-shrink:0 }
+.sidebar-controls button,.sidebar-controls select { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em; padding:4px 10px; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; transition:background .15s }
+.sidebar-controls button:hover { background:var(--ink); color:var(--paper) }
+.sidebar-controls select { background:var(--paper) }
+.task-list { flex:1; overflow-y:auto; padding:4px 0 }
+.task-item { padding:12px 20px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .15s }
+.task-item:hover { background:var(--paper) }
+.task-item.active { background:var(--paper); box-shadow:inset 3px 0 0 var(--green) }
+.task-item .title { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.task-item .meta { font-family:var(--mono); font-size:10px; margin-top:4px; display:flex; gap:8px; align-items:center; opacity:.6 }
+.task-item .status-badge { font-family:var(--mono); font-size:9px; padding:1px 8px; letter-spacing:.06em; color:var(--card); display:inline-block }
+/* Main */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0 }
+.main-header { padding:14px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; flex-shrink:0; flex-wrap:wrap }
+.main-header h2 { font-family:var(--serif); font-size:20px; font-weight:400; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.main-header .actions { display:flex; gap:6px; flex-shrink:0 }
+.main-header .actions button { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; padding:5px 14px; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; transition:all .15s }
+.main-header .actions button:hover { background:var(--ink); color:var(--paper) }
+.main-header .actions button.danger { border-color:var(--red); color:var(--red) }
+.main-header .actions button.danger:hover { background:var(--red); color:var(--card) }
+/* Event area */
+.event-area { flex:1; overflow-y:auto; padding:16px 24px; font-family:var(--mono); font-size:13px; line-height:1.7 }
+.event-area .empty { font-family:var(--font); color:var(--ink); text-align:center; padding:60px 20px; font-size:13px; opacity:.4 }
+.event-line { padding:3px 0; white-space:pre-wrap; word-break:break-all }
+.event-line.stdout { color:var(--ink) }
+.event-line.stderr { color:var(--red) }
+.event-line.status { color:var(--green); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:8px 0 4px; opacity:.7 }
+.event-line.result { color:var(--green); margin-top:12px; padding:12px 16px; background:var(--card); border:1px solid var(--line); white-space:pre-wrap; font-size:12px }
+.event-line.error { color:var(--red); margin-top:12px; padding:12px 16px; background:var(--card); border:1px solid var(--line); white-space:pre-wrap; font-size:12px }
+/* Detail panel */
+.detail-panel { width:280px; min-width:240px; background:var(--card); border-left:1px solid var(--line); display:flex; flex-direction:column; overflow:hidden }
+.detail-header { padding:14px 20px; border-bottom:1px solid var(--line); font-family:var(--serif); font-size:18px; flex-shrink:0 }
+.detail-body { flex:1; overflow-y:auto; padding:14px 20px; font-size:12px }
+.detail-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--line); font-size:11px }
+.detail-row .label { opacity:.5; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.06em; flex-shrink:0 }
+.detail-row .value { text-align:right; font-family:var(--mono); font-size:11px; word-break:break-all; max-width:160px }
+.detail-section { margin-top:16px; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; opacity:.5; padding-bottom:4px; border-bottom:1px solid var(--line) }
+.detail-link { color:var(--green); text-decoration:none }
+.detail-link:hover { text-decoration:underline }
+/* Status colors */
+.s-queued { background:var(--queued) } .s-running { background:var(--running) } .s-succeeded { background:var(--succeeded) }
+.s-failed { background:var(--failed) } .s-timed_out { background:var(--timed_out) } .s-cancelled { background:var(--cancelled) } .s-orphaned { background:var(--orphaned) }
+/* Scroll toggle */
+.scroll-toggle { position:fixed; bottom:24px; right:24px; z-index:100; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; padding:8px 16px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; box-shadow:2px 2px 0 var(--line); transition:all .15s }
+.scroll-toggle:hover { box-shadow:3px 3px 0 var(--line); transform:translate(-1px,-1px) }
+/* Responsive */
+@media(max-width:900px) { .detail-panel { display:none } }
+@media(max-width:700px) { .sidebar { width:200px; min-width:160px } }
+</style>
+</head>
+<body>
+<div id="loginOverlay" style="display:none">
+  <div id="loginBox">
+    <h2>DSH<span style="color:var(--green)">.</span></h2>
+    <p>Agents &middot; Bearer Token</p>
+    <input type="password" id="tokenInput" placeholder="token" autofocus>
+    <button onclick="login()">Connect</button>
+    <div class="error" id="loginError">Token invalid</div>
+  </div>
+</div>
+<div id="app" style="display:none">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>DSH<span>.</span></h1>
+      <span class="badge" id="taskCount">0</span>
+      <button class="logout-btn" onclick="logout()">Exit</button>
+    </div>
+    <div class="sidebar-controls">
+      <select id="statusFilter" onchange="applyFilter()">
+        <option value="">All</option>
+        <option value="queued">queued</option>
+        <option value="running">running</option>
+        <option value="succeeded">succeeded</option>
+        <option value="failed">failed</option>
+        <option value="timed_out">timed out</option>
+        <option value="cancelled">cancelled</option>
+        <option value="orphaned">orphaned</option>
+      </select>
+      <button onclick="fetchTasks()">↻</button>
+    </div>
+    <div class="task-list" id="taskList"></div>
+  </div>
+  <div class="main">
+    <div class="main-header" id="mainHeader">
+      <h2>Select a task</h2>
+      <div class="actions" id="taskActions" style="display:none">
+        <button class="danger" onclick="cancelTask()">✕ Cancel</button>
+        <button onclick="retryTask()">↻ Retry</button>
+      </div>
+    </div>
+    <div class="event-area" id="eventArea"><div class="empty">Select a task from the sidebar</div></div>
+  </div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">Task</div>
+    <div class="detail-body" id="detailBody"><div class="empty" style="padding:20px;text-align:center;opacity:.4;font-size:12px">Select a task</div></div>
+  </div>
+</div>
+<button class="scroll-toggle" id="scrollToggle" onclick="toggleScroll()">⏸ Pause</button>
+<script>
+const state = { tasks: [], selectedTaskId: null, autoScroll: true, es: null, token: '' };
+const $ = id => document.getElementById(id);
+const ago = ts => { if (!ts) return ''; const d = Date.now()-ts; if(d<60000) return Math.round(d/1000)+'s'; if(d<3600000) return Math.round(d/60000)+'m'; return Math.round(d/3600000)+'h'; };
+const fmtTime = ts => ts ? new Date(ts).toLocaleString() : '-';
+const shortId = id => id ? (id.length>20 ? id.slice(0,8)+'…'+id.slice(-6) : id) : '';
+const esc = s => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
+
+function loadToken() { const m=document.cookie.match(/(?:^| )dsh_token=([^;]+)/); return m?decodeURIComponent(m[1]):sessionStorage.getItem('dsh_token')||''; }
+function saveToken(t) { state.token=t; sessionStorage.setItem('dsh_token',t); document.cookie='dsh_token='+encodeURIComponent(t)+';path=/;SameSite=Strict;max-age=86400'; }
+function clearToken() { state.token=''; sessionStorage.removeItem('dsh_token'); document.cookie='dsh_token=;path=/;SameSite=Strict;max-age=0'; }
+function authHeader() { const t=state.token||loadToken(); return t?{'Authorization':'Bearer '+t}:{}; }
+
+async function checkAuth() {
+  if(!state.token) state.token=loadToken();
+  if(!state.token) { showLogin(); return false; }
+  try { const r=await fetch('/api/agents/tasks',{headers:authHeader()}); if(r.ok) return true; } catch {}
+  showLogin(); return false;
+}
+function showLogin() { $('loginOverlay').style.display='flex'; $('app').style.display='none'; }
+function hideLogin() { $('loginOverlay').style.display='none'; $('app').style.display='flex'; }
+async function login() {
+  const t=$('tokenInput').value.trim(); if(!t) return;
+  try { const r=await fetch('/api/agents/tasks',{headers:{'Authorization':'Bearer '+t}}); if(r.ok) { saveToken(t); $('loginError').style.display='none'; hideLogin(); init(); return; } } catch {}
+  $('loginError').style.display='block';
+}
+function logout() { clearToken(); if(state.es){state.es.close();state.es=null} showLogin(); }
+
+function renderTaskList() {
+  const filter=$('statusFilter').value;
+  let tasks=state.tasks; if(filter) tasks=tasks.filter(t=>t.status===filter);
+  $('taskCount').textContent=state.tasks.length;
+  const el=$('taskList');
+  if(!tasks.length) { el.innerHTML='<div style="padding:30px 20px;text-align:center;opacity:.35;font-size:12px">No tasks</div>'; return; }
+  el.innerHTML=tasks.map(t => `<div class="task-item ${t.taskId===state.selectedTaskId?'active':''}" onclick="selectTask('${t.taskId}')">
+    <div class="title">${esc(t.taskId)}</div>
+    <div class="meta"><span class="status-badge s-${t.status.replace(/_/g,'_')}">${t.status}</span> <span>${t.createdAt?ago(t.createdAt):''}</span></div>
+  </div>`).join('');
+}
+function applyFilter() { renderTaskList(); }
+
+async function selectTask(taskId) {
+  state.selectedTaskId=taskId; renderTaskList();
+  $('mainHeader').querySelector('h2').textContent=shortId(taskId);
+  $('taskActions').style.display='flex';
+  $('eventArea').innerHTML='<div class="empty">Loading…</div>';
+  await loadTaskDetail(taskId); await loadTaskEvents(taskId);
+}
+
+async function loadTaskDetail(taskId) {
+  try {
+    const r=await fetch('/api/agents/tasks/'+taskId,{headers:authHeader()});
+    if(!r.ok) return; const d=await r.json();
+    $('detailBody').innerHTML=`
+      <div class="detail-row"><span class="label">taskId</span><span class="value">${esc(d.taskId)}</span></div>
+      <div class="detail-row"><span class="label">status</span><span class="value"><span class="status-badge s-${d.status.replace(/_/g,'_')}">${d.status}</span></span></div>
+      <div class="detail-row"><span class="label">cwd</span><span class="value">${esc(d.cwd||d.request?.cwd||'-')}</span></div>
+      ${d.pid?`<div class="detail-row"><span class="label">PID</span><span class="value">${d.pid}</span></div>`:''}
+      ${d.supervisor?.pid?`<div class="detail-row"><span class="label">supervisor</span><span class="value">${d.supervisor.pid}</span></div>`:''}
+      <div class="detail-row"><span class="label">created</span><span class="value">${fmtTime(d.createdAt)}</span></div>
+      ${d.startedAt?`<div class="detail-row"><span class="label">started</span><span class="value">${fmtTime(d.startedAt)}</span></div>`:''}
+      ${d.completedAt?`<div class="detail-row"><span class="label">completed</span><span class="value">${fmtTime(d.completedAt)}</span></div>`:''}
+      ${d.exitCode!==undefined?`<div class="detail-row"><span class="label">exitCode</span><span class="value">${d.exitCode}</span></div>`:''}
+      ${d.retryOf?`<div class="detail-row"><span class="label">retryOf</span><span class="value"><a class="detail-link" href="#" onclick="selectTask('${d.retryOf}');return false">${shortId(d.retryOf)}</a></span></div>`:''}
+      ${d.result?`<div class="detail-section">result</div><pre style="font-size:11px;margin-top:6px;overflow-x:auto;white-space:pre-wrap">${esc(JSON.stringify(d.result,null,2))}</pre>`:''}
+      <div class="detail-section">artifacts</div>
+      ${d.artifacts?.length?'<ul style="margin-top:6px;font-size:11px;list-style:none">'+d.artifacts.map(a=>`<li style="padding:3px 0"><a class="detail-link" href="/api/agents/tasks/${d.taskId}/files/${a.name}" target="_blank">${esc(a.name)}</a> <span style="opacity:.4">(${(a.size/1024).toFixed(1)}KB)</span></li>`).join('')+'</ul>':'<div style="opacity:.35;font-size:11px;margin-top:6px">none</div>'}
+    `;
+  } catch {}
+}
+
+async function loadTaskEvents(taskId) {
+  try {
+    const r=await fetch('/api/agents/tasks/'+taskId+'/events?cursor=0',{headers:authHeader()});
+    if(!r.ok) return; const d=await r.json();
+    if(!d.events?.length) return;
+    const area=$('eventArea'); if(state.selectedTaskId!==taskId) return;
+    area.innerHTML=d.events.map(ev => {
+      if(ev.event==='stdout') return `<div class="event-line stdout">${esc(ev.text)}</div>`;
+      if(ev.event==='stderr') return `<div class="event-line stderr">${esc(ev.text)}</div>`;
+      if(ev.event==='status') return `<div class="event-line status">${ev.status}</div>`;
+      return `<div class="event-line">${esc(JSON.stringify(ev))}</div>`;
+    }).join('');
+    if(state.autoScroll) area.scrollTop=area.scrollHeight;
+  } catch {}
+}
+
+function appendEvents(taskId, events) {
+  if(state.selectedTaskId!==taskId||!events?.length) return;
+  const area=$('eventArea'); const empty=area.querySelector('.empty'); if(empty) area.innerHTML='';
+  for(const ev of events) {
+    const div=document.createElement('div');
+    if(ev.event==='stdout'){div.className='event-line stdout';div.textContent=ev.text}
+    else if(ev.event==='stderr'){div.className='event-line stderr';div.textContent=ev.text}
+    else if(ev.event==='status'){div.className='event-line status';div.textContent=ev.status}
+    else{div.className='event-line';div.textContent=JSON.stringify(ev)}
+    area.appendChild(div);
+  }
+  if(state.autoScroll) area.scrollTop=area.scrollHeight;
+}
+
+async function cancelTask() {
+  if(!state.selectedTaskId||!confirm('Cancel this task?')) return;
+  try{await fetch('/api/agents/tasks/'+state.selectedTaskId+'/cancel',{method:'POST',headers:authHeader()})}catch{}
+}
+async function retryTask() {
+  if(!state.selectedTaskId) return;
+  try{const r=await fetch('/api/agents/tasks/'+state.selectedTaskId+'/retry',{method:'POST',headers:authHeader()});if(r.ok){const d=await r.json();await fetchTasks();selectTask(d.taskId)}}catch{}
+}
+function toggleScroll() {
+  state.autoScroll=!state.autoScroll;
+  $('scrollToggle').textContent=state.autoScroll?'⏸ Pause':'▶ Scroll';
+  if(state.autoScroll){const a=$('eventArea');a.scrollTop=a.scrollHeight}
+}
+
+function connectSSE() {
+  if(state.es) state.es.close();
+  const token=state.token||loadToken(); if(!token) return;
+  const es=new EventSource('/api/agents/stream?cursor=0'); state.es=es;
+  es.addEventListener('snapshot',e=>{try{state.tasks=JSON.parse(e.data).tasks||[];renderTaskList()}catch{}});
+  const evts=['task_created','task_started','task_output','task_succeeded','task_failed','task_cancelled','task_timed_out','task_orphaned'];
+  for(const evt of evts) es.addEventListener(evt, handleTaskEvent);
+  es.onerror=()=>{es.close();setTimeout(connectSSE,3000)};
+}
+function handleTaskEvent(e) {
+  try{const d=JSON.parse(e.data);const idx=state.tasks.findIndex(t=>t.taskId===d.taskId);
+  if(idx>=0) state.tasks[idx]={...state.tasks[idx],status:d.status||state.tasks[idx].status,updatedAt:Date.now()};
+  else state.tasks.unshift({taskId:d.taskId,status:d.status||'queued',createdAt:Date.now()});
+  renderTaskList();
+  if(d.taskId===state.selectedTaskId){
+    if(d.type==='task_output') appendEvents(d.taskId,[{seq:d.seq,event:d.stream==='stderr'?'stderr':'stdout',text:d.text}]);
+    else if(d.type&&d.type.startsWith('task_')){
+      const st=d.type.replace('task_','');
+      appendEvents(d.taskId,[{seq:d.seq||0,event:'status',status:st}]);
+      loadTaskDetail(d.taskId);
+    }
+  }}catch{}
+}
+
+async function fetchTasks() {
+  try{const r=await fetch('/api/agents/tasks',{headers:authHeader()});if(r.ok){state.tasks=(await r.json()).tasks||[];renderTaskList()}}catch{}
+}
+async function init() { await fetchTasks(); connectSSE(); const p=new URLSearchParams(location.search); if(p.get('task')) setTimeout(()=>selectTask(p.get('task')),500); }
+
+const savedToken=loadToken();
+if(savedToken){state.token=savedToken;hideLogin();init()}else{showLogin()}
+setInterval(()=>{if(!state.es||state.es.readyState!==EventSource.OPEN) fetchTasks()},10000);
+</script>
+</body>
+</html>

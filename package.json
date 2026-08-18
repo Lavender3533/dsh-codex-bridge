@@ -1,0 +1,33 @@
+{
+  "name": "dsh-codex-bridge",
+  "version": "0.3.0",
+  "description": "DSH plugin / MCP server — let Codex, Claude Code, Cursor use DSH as an external resumable sub-agent",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "keywords": ["dsh", "dsh-plugin", "mcp", "mcp-server", "deepseek-harness", "codex", "sub-agent", "agent-bridge"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lavender3533/dsh-codex-bridge.git"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  }
+}
