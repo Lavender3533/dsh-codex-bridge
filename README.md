@@ -46,6 +46,18 @@ open http://127.0.0.1:3101/agents
 | `dsh_task_list` | List all tasks with status |
 | `dsh_get_status` | Bridge health and stats |
 
+### dsh_task_start parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | string | yes | Idempotent request ID (same ID never starts twice) |
+| `task` | string | yes | Task prompt for DSH headless |
+| `cwd` | string | no | Working directory (must be whitelisted) |
+| `timeoutMs` | number | no | Task timeout (default 300000, max 3600000) |
+| `model` | string | no | Model ID override, e.g. `deepseek-v4-flash-0731`. Generated via `dsh --patch` overlay on `agent-default-model`; provider comes from your `settings.yaml`. |
+
+Example: `{ "taskId": "t1", "task": "write a poem", "model": "deepseek-v4-flash-0731" }`
+
 ## State Machine
 
 ```
