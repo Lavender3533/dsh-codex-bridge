@@ -123,3 +123,7 @@ dsh-codex-bridge/
 ## License
 
 MIT
+
+## Community
+
+Discussion & endorsement: [Linux DO](https://linux.do)
